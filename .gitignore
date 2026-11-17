@@ -1,0 +1,17 @@
+.env
+.env.local
+.env.*.local
+.venv*/
+node_modules
+__pycache__/
+*.pyc
+*.tsbuildinfo
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite*-wal
+*.sqlite*-shm
+data/
+*.csv
+wheelhouse*/
+conda-bundle*/
