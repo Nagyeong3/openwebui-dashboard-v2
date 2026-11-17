@@ -445,7 +445,21 @@ test('report formatting preserves exact token tooltip and tied rank movement',as
   const html=renderToStaticMarkup(React.createElement(TokenCount,{value:1234567}));
   assert.match(html,/title="1,234,567 토큰"/);assert.match(html,/>1.23M</);
   assert.equal(rankMovement({rankChange:3,rankChangeStatus:'compared'}),'▲ 3');
-  assert.equal(rankMovement({rankChange:null,rankChangeStatus:'new-activity'}),'신규 사용');
+  assert.equal(rankMovement({rankChange:2,rankChangeStatus:'compared'}),'▲ 2');
+  assert.equal(rankMovement({rankChange:0,rankChangeStatus:'compared'}),'0');
+  assert.equal(rankMovement({rankChange:null,rankChangeStatus:'unavailable'}),'—');
+});
+
+test('comparison badge distinguishes zero baseline, unavailable roster and signed changes',async()=>{
+  const React=await import('react');const {renderToStaticMarkup}=await import('react-dom/server');
+  const {ComparisonBadge}=await import('./Comparison');
+  const comparison={current:20,previous:10,changePercent:100,status:'available' as const,start:'2026-11-01',end:'2026-11-07'};
+  const render=(c:any)=>renderToStaticMarkup(React.createElement(ComparisonBadge,{comparison:c}));
+  assert.match(render(comparison),/\+100\.0%/);
+  assert.match(render({...comparison,current:0,changePercent:-100}),/−100\.0%/);
+  assert.match(render({...comparison,current:0,previous:0,changePercent:0}),/>0\.0%</);
+  assert.match(render({...comparison,previous:null,changePercent:null,status:'no-roster-history'}),/과거 사용자 명부/);
+  assert.match(render({...comparison,previous:0,changePercent:null,status:'zero-baseline'}),/비교 불가/);
 });
 
 test('report comparison dates survive overview transport and weekly totals reconcile',async()=>{

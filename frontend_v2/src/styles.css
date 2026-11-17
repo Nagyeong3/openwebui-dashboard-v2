@@ -735,6 +735,7 @@ h1 {
 }
 .metric-value {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   margin-top: 7px;
@@ -766,6 +767,10 @@ h1 {
 .delta.down {
   background: #9e9eac10;
   color: #9895b8;
+}
+.delta.comparison-neutral {
+  background: var(--hover);
+  color: var(--muted);
 }
 .metric-accent {
   background: linear-gradient(120deg, #7168e9, #6562dc);

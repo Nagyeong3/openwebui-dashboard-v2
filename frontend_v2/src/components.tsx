@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {ComparisonBadge} from './Comparison';
 import { animate, motion, useReducedMotion } from "motion/react";
 import * as echarts from "echarts/core";
 import { LineChart, BarChart, PieChart } from "echarts/charts";
@@ -224,6 +225,7 @@ export function Metric({
   accent = false,
   format = compact,
   comparisonAvailable = true,
+  comparison,
 }: {
   label: string;
   value: number;
@@ -233,6 +235,7 @@ export function Metric({
   accent?: boolean;
   format?: (n: number) => string;
   comparisonAvailable?: boolean;
+  comparison?: import('./Comparison').MetricComparison;
 }) {
   const delta =
     prior !== undefined && prior > 0 ? ((value - prior) / prior) * 100 : null;
@@ -249,7 +252,8 @@ export function Metric({
       </div>
       <div className="metric-value">
         <Count value={value} format={format} />
-        {prior !== undefined && (
+        {comparison && <ComparisonBadge comparison={comparison}/>}
+        {!comparison && prior !== undefined && (
           <span
             className={"delta " + (delta !== null && delta < 0 ? "down" : "")}
           >

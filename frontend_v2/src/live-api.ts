@@ -293,6 +293,7 @@ export type OverviewPayload = Pick<
   Payload,
   "schemaVersion" | "source" | "period" | "updatedAt" | "dataState" | "daily"
 > & {
+  metricComparisons?: Record<string, import('./Comparison').MetricComparison>;
   summary: Payload["summary"] & {
     averageQuestionsPerChat: number | null;
     leaders: number;
@@ -400,6 +401,15 @@ export function validateOverview(
     fail();
   if (c.status === "zero-baseline" && c.questions !== 0) fail();
   if(p.activity30d){const a=p.activity30d;if(!text(a.start)||!text(a.end)||a.days!==30||!count(a.users)||!Number.isFinite(a.dailyAverage)||a.dailyAverage<0)fail();}
+  if(p.metricComparisons){
+    const keys=['activeUsers','questions','tokens','users','chats','attachmentQuestions','averageQuestionsPerChat','activeLeaders','activity30dUsers','dailyAverage'];
+    for(const key of keys){
+      const m=p.metricComparisons[key];
+      if(!m||!['available','zero-baseline','no-history','no-roster-history','all-time','not-connected','not-synced','no-value'].includes(m.status)||!nullableText(m.start)||!nullableText(m.end))fail();
+      if([m.current,m.previous].some(v=>v!==null&&(!Number.isFinite(v)||v<0)))fail();
+      if(m.status==='available'?m.current===null||m.previous===null||!Number.isFinite(m.changePercent)||m.changePercent===null:m.changePercent!==null)fail();
+    }
+  }
   if(p.weeklyResponses){const w=p.weeklyResponses;if(!Array.isArray(w.records)||!count(w.total)||!count(w.peak)||w.records.some(r=>!text(r.start)||!text(r.end)||!count(r.responses)||typeof r.partial!=='boolean')||w.records.reduce((n,r)=>n+r.responses,0)!==w.total||Math.max(0,...w.records.map(r=>r.responses))!==w.peak)fail();}
   const t = p.integrations?.tokens,
     categories = p.integrations?.categories;
@@ -518,7 +528,12 @@ export function overviewCsv(p: OverviewPayload): string {
     ]),
   ];
   if(p.leaderComparison)rows.push([],['순위 비교 시작일',p.leaderComparison.start],['순위 비교 종료일',p.leaderComparison.end]);
-  if(p.activity30d)rows.push([],['사용 사용자 집계 시작',p.activity30d.start],['사용 사용자 집계 종료',p.activity30d.end],['30일 사용 사용자',p.activity30d.users],['일일 사용 사용자 평균',p.activity30d.dailyAverage]);
+  if(p.activity30d)rows.push([],['접속자 집계 시작',p.activity30d.start],['접속자 집계 종료',p.activity30d.end],['최근 30일간 접속자',p.activity30d.users],['일일 사용자 평균',p.activity30d.dailyAverage]);
+  if(p.metricComparisons){
+    const labels:Record<string,string>={activeUsers:'활성 사용자',questions:'총 질문 수',tokens:'총 토큰',users:'전체 사용자 수',chats:'총 채팅방 수',attachmentQuestions:'파일 첨부 질문',averageQuestionsPerChat:'평균 질문/채팅방',activeLeaders:'활성 팀장',activity30dUsers:'최근 30일간 접속자',dailyAverage:'일일 사용자 평균'};
+    const statuses:Record<string,string>={available:'비교 가능','zero-baseline':'이전 값 0','no-history':'이전 수집 이력 부족','no-roster-history':'과거 사용자 명부 없음','all-time':'전체 기간','not-connected':'연동 필요','not-synced':'업데이트 필요','no-value':'평균 산정 불가'};
+    rows.push([],['지표','현재 값','이전 값','증감률 (%)','비교 시작일','비교 종료일','비교 상태'],...Object.entries(p.metricComparisons).map(([key,m])=>[labels[key]||key,m.current,m.previous,m.changePercent,m.start,m.end,statuses[m.status]]));
+  }
   if(p.weeklyResponses)rows.push([],['주간 시작','주간 종료','모델 응답 수','일부 기간'],...p.weeklyResponses.records.map(r=>[r.start,r.end,r.responses,r.partial?'예':'아니오']),['기간 모델 응답 총계',p.weeklyResponses.total],['최고 주간 응답',p.weeklyResponses.peak]);
   return "\ufeff" + rows.map((r) => r.map(escape).join(",")).join("\r\n");
 }

@@ -4,9 +4,8 @@ import type {Query} from './live-api';
 export type RankFields={reportRank?:number;previousRank?:number|null;previousQuestions?:number|null;rankChange?:number|null;rankChangeStatus?:string;questionChange?:number|null};
 export type LeaderComparison={start:string|null;end:string|null;status:string;sameLength:boolean};
 export function rankMovement(r:RankFields){
-  if(r.rankChangeStatus==='new-activity')return '신규 사용';
   if(r.rankChangeStatus==='unavailable'||r.rankChange==null)return '—';
-  return r.rankChange>0?`▲ ${r.rankChange}`:r.rankChange<0?`▼ ${Math.abs(r.rankChange)}`:'유지';
+  return r.rankChange>0?`▲ ${r.rankChange}`:r.rankChange<0?`▼ ${Math.abs(r.rankChange)}`:'0';
 }
 export function RankMovement({row}:{row:RankFields}){
   return <span className={'rank-movement '+(row.rankChange&&row.rankChange>0?'up':row.rankChange&&row.rankChange<0?'down':'')} title={row.previousRank!=null?`이전 ${row.previousRank}위 · 질문 ${number(row.previousQuestions??0)}건`:'비교 가능한 이전 사용 기록 없음'}>{rankMovement(row)}</span>;

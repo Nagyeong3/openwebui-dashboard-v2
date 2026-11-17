@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from backend_v2.reporting import leader_comparison,overview_activity
+from backend_v2.reporting import leader_comparison,overview_activity,metric_change
 SEOUL=ZoneInfo('Asia/Seoul')
 def m(uid,day,role='user'):
     return {'user_id':uid,'created_at':datetime.fromisoformat(day+'T12:00:00').replace(tzinfo=SEOUL).timestamp(),'role':role}
@@ -10,7 +10,13 @@ class ReportingTests(unittest.TestCase):
     def test_ties_and_same_cohort(self):
         r=rows();info=leader_comparison(r,[m('a','2026-11-01'),m('c','2026-11-01'),m('c','2026-11-01')],'2026-11-08','2026-11-14')
         self.assertEqual(info['start'],'2026-11-01');self.assertEqual([x['reportRank'] for x in r],[1,1,3])
-        self.assertEqual(r[0]['rankChange'],1);self.assertEqual(r[1]['rankChangeStatus'],'new-activity');self.assertEqual(r[2]['rankChange'],-2)
+        self.assertEqual(r[0]['rankChange'],1);self.assertEqual(r[1]['rankChange'],2);self.assertEqual(r[1]['rankChangeStatus'],'compared');self.assertEqual(r[2]['rankChange'],-2)
+    def test_percent_zero_and_missing_history(self):
+        self.assertEqual(metric_change(20,10,'2026-01-01','2026-01-07')['changePercent'],100)
+        self.assertEqual(metric_change(0,10,None,None)['changePercent'],-100)
+        self.assertEqual(metric_change(0,0,None,None)['changePercent'],0)
+        self.assertEqual(metric_change(1,0,None,None)['status'],'zero-baseline')
+        self.assertIsNone(metric_change(10,None,None,None,'no-history')['changePercent'])
     def test_unknown_history_not_zero(self):
         r=rows();info=leader_comparison(r,[m('a','2026-11-10')],'2026-11-08','2026-11-14')
         self.assertEqual(info['status'],'no-history');self.assertIsNone(r[0]['rankChange']);self.assertIsNone(r[0]['previousQuestions'])
@@ -58,6 +64,26 @@ class ReportingApiTests(unittest.TestCase):
                 query='start=2026-11-09&end=2026-11-15&compareStart=2026-11-01&compareEnd=2026-11-07'
                 response=web.get('/api/dashboard/v2/overview?'+query);self.assertEqual(response.status_code,200)
                 p=response.json();self.assertEqual(p['weeklyResponses']['total'],7);self.assertEqual(p['leaderTop10'][0]['rankChange'],1);self.assertEqual(p['activity30d']['users'],2)
+                metrics=p['metricComparisons'];self.assertEqual(len(metrics),10)
+                self.assertEqual(metrics['questions']['changePercent'],0)
+                self.assertEqual(metrics['activeLeaders']['previous'],2)
+                self.assertEqual(metrics['users']['status'],'no-roster-history')
+                self.assertIsNone(metrics['users']['changePercent'])
+                self.assertEqual(metrics['questions']['start'],'2026-11-02')
+                self.assertEqual(metrics['activity30dUsers']['end'],'2026-10-16')
+                from backend_v2.token_store import TokenStore
+                store=TokenStore(s.token_cache_path)
+                with store.connect() as db:
+                    db.executemany('INSERT INTO token_meta(key,value) VALUES(?,?)', [('last_success','2026-11-16T00:00:00+09:00'),('coverage_start',str(m('u1','2026-11-01')['created_at']))])
+                    db.executemany('INSERT INTO token_logs VALUES(?,?,?,?,?,?,?,?,?,?)', [
+                        ('before',m('u1','2026-11-02')['created_at'],'test',100,0,100,0,'u1','',''),
+                        ('now',m('u1','2026-11-10')['created_at'],'test',150,0,150,0,'u1','','')])
+                tokens=web.get('/api/dashboard/v2/overview?'+query).json()['metricComparisons']['tokens']
+                self.assertEqual(tokens['changePercent'],50)
+                with store.connect() as db:
+                    db.execute("UPDATE token_meta SET value=? WHERE key='coverage_start'",(str(m('u1','2026-11-05')['created_at']),))
+                tokens=web.get('/api/dashboard/v2/overview?'+query).json()['metricComparisons']['tokens']
+                self.assertEqual(tokens['status'],'no-history');self.assertIsNone(tokens['changePercent'])
                 response=web.get('/api/dashboard/v2/users?view=leader&pageSize=1&'+query);self.assertEqual(response.status_code,200)
                 self.assertEqual(len(response.json()['leaderRanking']),3);self.assertEqual(response.json()['detail']['records'][0]['previousRank'],2)
                 export=web.get('/api/dashboard/v2/users/export?view=leader&'+query);self.assertEqual(export.status_code,200);self.assertIn('순위 증감',export.text)

@@ -97,12 +97,14 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
         "averagePerRequest": None,
         "costUsd": None,
     }
+    previous_tokens = None
+    token_comparison_status = 'not-connected'
     if settings.litellm_url or settings.token_cache_path.exists():
         try:
             from .token_analytics import token_usage
 
             result = token_usage(
-                cache,
+                Snapshot(),
                 settings,
                 start=a,
                 end=b,
@@ -115,8 +117,17 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
                 "updatedAt": result["updatedAt"],
                 "stale": result["dataState"]["stale"],
             }
+            if a and b:
+                from .token_store import TokenStore
+                _, token_meta = TokenStore(settings.token_cache_path).read(settings)
+                previous_result = token_usage(Snapshot(), settings, start=comparison['start'], end=comparison['end'])
+                previous_tokens = previous_result['summary']['total']
+                coverage = float(token_meta.get('coverage_start', 'inf'))
+                token_comparison_status = 'available' if coverage <= lo else 'no-history'
         except Exception:
-            tokens["status"] = "not-synced"
+            if tokens['status'] != 'ready':
+                tokens["status"] = "not-synced"
+            token_comparison_status = 'not-synced'
     categories = {"status":"not-connected","source":"embedding-classifier","records":None,"classified":None}
     if settings.category_csv or settings.category_cache_path.exists():
         try:
@@ -127,9 +138,32 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
                           "pending":result["summary"]["pending"]}
         except Exception:
             categories = {"status":"not-synced","source":"litellm-classifier","records":None,"classified":None}
-    from .reporting import overview_activity
+    from .reporting import overview_activity, metric_change
     activity,weekly=overview_activity(snapshot[0],snapshot[1],a,b,payload["updatedAt"])
+    keys = ('activeUsers', 'questions', 'chats', 'attachmentQuestions', 'averageQuestionsPerChat', 'activeLeaders')
+    metrics = {key: metric_change(summary[key], None, None, None, 'all-time') for key in keys}
+    if a and b:
+        previous = user_usage(Snapshot(), settings, start=comparison['start'], end=comparison['end'], paginate=False)
+        old_summary = previous['summary']
+        old_summary['averageQuestionsPerChat'] = old_summary['questions']/old_summary['chats'] if old_summary['chats'] else None
+        old_summary['activeLeaders'] = sum('팀장' in r['position'] and r['questions'] > 0 for r in previous['detail']['records'])
+        known = any(m['created_at'] < hi for m in snapshot[1])
+        for key in keys:
+            current = summary[key]
+            if key == 'averageQuestionsPerChat':
+                current = summary['questions']/summary['chats'] if summary['chats'] else None
+            metrics[key] = metric_change(current, old_summary[key] if known else None, comparison['start'], comparison['end'], 'available' if known else 'no-history')
+    metrics['users'] = metric_change(summary['users'], None, comparison['start'], comparison['end'], 'no-roster-history' if a else 'all-time')
+    metrics['tokens'] = metric_change(tokens['total'], previous_tokens, comparison['start'], comparison['end'], token_comparison_status if a else 'all-time')
+    activity_start = datetime.fromisoformat(activity['start']).date()
+    old_activity_end = (activity_start - timedelta(days=1)).isoformat()
+    old_activity_start = (activity_start - timedelta(days=30)).isoformat()
+    old_activity, _ = overview_activity(snapshot[0], snapshot[1], old_activity_start, old_activity_end, payload['updatedAt'])
+    activity_known = any(m['created_at'] < datetime.combine(activity_start, time.min, SEOUL).timestamp() for m in snapshot[1])
+    for key, value_key in [('activity30dUsers', 'users'), ('dailyAverage', 'dailyAverage')]:
+        metrics[key] = metric_change(activity[value_key], old_activity[value_key] if activity_known else None, old_activity_start, old_activity_end, 'available' if activity_known else 'no-history')
     return {
+        "metricComparisons": metrics,
         "activity30d": activity,
         "weeklyResponses": weekly,
         "leaderComparison": payload["leaderComparison"],

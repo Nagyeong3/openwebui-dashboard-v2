@@ -1,4 +1,5 @@
 import {TokenCount,RankComparison,RankMovement,rankMovement} from "./Reporting";
+import {ComparisonBadge} from './Comparison';
 import { useEffect, useState } from "react";
 import { CategoryDistribution } from "./Categories";
 import {
@@ -153,6 +154,7 @@ export default function Overview({
   const tokens = data.integrations.tokens;
   const s = data.summary,
     c = data.comparison;
+  const comparisons = data.metricComparisons;
   const comparisonNote =
     c.status === "all-time"
       ? "전체 기간은 이전 기간 비교 없음"
@@ -212,6 +214,7 @@ export default function Overview({
         <Metric
           label="활성 사용자"
           value={s.activeUsers}
+          comparison={comparisons?.activeUsers}
           format={(n) => number(n) + "명"}
           note="선택 기간 질문 1건 이상"
           icon={<Activity size={18} />}
@@ -221,6 +224,7 @@ export default function Overview({
           value={s.questions}
           format={(n) => number(n) + "건"}
           prior={c.questions ?? undefined}
+          comparison={comparisons?.questions}
           comparisonAvailable={c.status === "available"}
           note={comparisonNote}
           icon={<MessageSquare size={18} />}
@@ -233,6 +237,7 @@ export default function Overview({
           <strong className="pending-value">
             <TokenCount value={tokens.total}/>
           </strong>
+          <ComparisonBadge comparison={comparisons?.tokens}/>
           <div className="metric-note">
             {tokens.status === "ready"
               ? "LiteLLM 로그 기준"
@@ -249,6 +254,7 @@ export default function Overview({
         <Metric
           label="전체 사용자 수"
           value={s.users}
+          comparison={comparisons?.users}
           format={(n) => number(n) + "명"}
           note="OpenWebUI 명부 · 사용량 0 포함"
           icon={<Users size={17} />}
@@ -256,6 +262,7 @@ export default function Overview({
         <Metric
           label="총 채팅방 수"
           value={s.chats}
+          comparison={comparisons?.chats}
           format={(n) => number(n) + "개"}
           note="기간 내 질문이 발생한 채팅방"
           icon={<MessageSquare size={17} />}
@@ -263,6 +270,7 @@ export default function Overview({
         <Metric
           label="파일 첨부 질문"
           value={s.attachmentQuestions}
+          comparison={comparisons?.attachmentQuestions}
           format={(n) => number(n) + "건"}
           note="파일이 포함된 사용자 질문"
           icon={<Paperclip size={17} />}
@@ -274,12 +282,14 @@ export default function Overview({
               <BarChart3 size={17} />
             </div>
             <strong className="pending-value">—</strong>
+            <ComparisonBadge comparison={comparisons?.averageQuestionsPerChat}/>
             <div className="metric-note">질문이 발생한 채팅방 없음</div>
           </article>
         ) : (
           <Metric
             label="평균 질문/채팅방"
             value={s.averageQuestionsPerChat}
+            comparison={comparisons?.averageQuestionsPerChat}
             format={(n) => n.toFixed(1) + "건"}
             note="총 질문 수 ÷ 총 채팅방 수"
             icon={<BarChart3 size={17} />}
@@ -288,18 +298,19 @@ export default function Overview({
         <Metric
           label="활성 팀장"
           value={s.activeLeaders}
+          comparison={comparisons?.activeLeaders}
           format={(n) => number(n) + "명"}
           note={`전체 팀장 ${number(s.leaders)}명 · 기간 내 질문 1건 이상`}
           icon={<Users size={17} />}
         />
       </div>
       {data.activity30d&&<div className="overview-activity">
-        <Metric label="최근 30일 사용 사용자" value={data.activity30d.users} format={n=>number(n)+'명'} note={`${data.activity30d.start} ~ ${data.activity30d.end} · 질문 1건 이상`} icon={<Users size={18}/>}/>
-        <Metric label="일일 사용 사용자 평균" value={data.activity30d.dailyAverage} format={n=>n.toFixed(1)+'명'} note="최근 30일 · 사용이 없는 날 포함" icon={<Activity size={18}/>}/>
+        <Metric label="최근 30일간 접속자" value={data.activity30d.users} comparison={comparisons?.activity30dUsers} format={n=>number(n)+'명'} note={`${data.activity30d.start} ~ ${data.activity30d.end} · 질문 1건 이상`} icon={<Users size={18}/>}/>
+        <Metric label="일일 사용자 평균" value={data.activity30d.dailyAverage} comparison={comparisons?.dailyAverage} format={n=>n.toFixed(1)+'명'} note="최근 30일 · 사용이 없는 날 포함" icon={<Activity size={18}/>}/>
       </div>}
       {data.weeklyResponses&&<Panel title="주간 메시지 추이" subtitle="모델 응답 수 기준 · 월요일~일요일 · 한국 시간">
         <div className="weekly-response-summary"><span>기간 총계 <strong>{number(data.weeklyResponses.total)}건</strong></span><span>최고 주간 <strong>{number(data.weeklyResponses.peak)}건</strong></span></div>
-        <Chart height={280} dark={dark} label="주간 모델 응답 메시지 수" option={{tooltip:{trigger:'axis',renderMode:'richText',formatter:(params:any)=>{const r=data.weeklyResponses!.records[params[0].dataIndex];return `${r.start} ~ ${r.end}${r.partial?' (일부 기간)':''}\n모델 응답 ${number(r.responses)}건`;}},grid:{left:60,right:25,top:20,bottom:55},xAxis:{type:'category',data:data.weeklyResponses.records.map(r=>r.start.slice(5)+(r.partial?'*':'')),axisLabel:{fontSize:14,color:dark?'#b0b4ce':'#70778f'}},yAxis:{type:'value',minInterval:1,axisLabel:{fontSize:14,color:dark?'#b0b4ce':'#70778f'}},series:[{type:'bar',data:data.weeklyResponses.records.map(r=>r.responses),itemStyle:{color:'#726bec',borderRadius:[4,4,0,0]}}]}}/>
+        <Chart height={280} dark={dark} label="주간 모델 응답 메시지 수" option={{tooltip:{trigger:'axis',renderMode:'richText',formatter:(params:any)=>{const r=data.weeklyResponses!.records[params[0].dataIndex];return `${r.start} ~ ${r.end}${r.partial?' (일부 기간)':''}\n모델 응답 ${number(r.responses)}건`;}},grid:{left:60,right:25,top:20,bottom:55},xAxis:{type:'category',boundaryGap:false,data:data.weeklyResponses.records.map(r=>r.start.slice(5)+(r.partial?'*':'')),axisLabel:{fontSize:14,color:dark?'#b0b4ce':'#70778f'}},yAxis:{type:'value',minInterval:1,axisLabel:{fontSize:14,color:dark?'#b0b4ce':'#70778f'}},series:[{type:'line',smooth:false,showSymbol:true,symbolSize:7,data:data.weeklyResponses.records.map(r=>r.responses),lineStyle:{color:'#726bec',width:3},itemStyle:{color:'#726bec'}}]}}/>
         <p className="live-note">* 조회 기간에 일부만 포함된 주 · 저장된 모델 응답 기준</p>
       </Panel>}
       <div className="overview-middle">
