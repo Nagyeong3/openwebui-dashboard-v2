@@ -8,3 +8,10 @@ export function formatDateMinute(value: string | number | Date | null | undefine
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? minuteFormatter.format(date) : empty;
 }
+
+export function seoulDateKey(value: string | number | Date): string | null {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return null;
+  const parts = Object.fromEntries(minuteFormatter.formatToParts(date).map(p => [p.type,p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}

@@ -191,7 +191,7 @@ export default function Overview({
   return (
     <div className="overview-content">
       <div className="overview-meta">
-        <DataFreshness data={data} unconfirmed={!!error}/>
+        <DataFreshness data={data}/>
         <button className="button" onClick={exportReport}>
           <ArrowDownToLine size={15} />
           리포트 CSV

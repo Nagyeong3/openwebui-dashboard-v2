@@ -37,7 +37,7 @@ test('custom period trigger shows selected dates rather than the menu label',()=
   const html=renderToStaticMarkup(React.createElement(PeriodPicker,{q:{...defaultQuery,range:'custom',start:'2026-11-01',end:'2026-11-20'},onChange:()=>{}}));
   assert.match(html,/2026\.11\.01 ~ 2026\.11\.20/);assert.doesNotMatch(html,/>기간 지정</);
 });
-test('freshness gaps use source watermarks, not latest messages, and respect historical periods and short delays',()=>{
+test('freshness compares only Korean calendar dates, not hours or minutes',()=>{
   const now=Date.parse('2026-11-23T12:00:00+09:00');
   assert.ok(freshnessGap('2026-11-16T08:30:00+09:00','2026-11-23',now));
   assert.equal(freshnessGap('2026-11-16T08:30:00+09:00','2026-11-15',now),null);
@@ -52,7 +52,23 @@ test('freshness gaps use source watermarks, not latest messages, and respect his
   const coveredHtml=renderToStaticMarkup(React.createElement(DataFreshness,{data:covered}));
   assert.doesNotMatch(coveredHtml,/업데이트 필요/);
   covered.freshness.tokens.coverageStart=String(Date.parse('2026-11-10T00:00:00+09:00')/1000);
-  assert.equal(requiresUpdate(covered,now),true);
+  assert.equal(requiresUpdate(covered,now),false);
+});
+
+test('matching end dates suppress the warning for any time, while either older source requires updating',()=>{
+  const now=Date.parse('2026-11-23T23:59:59+09:00');
+  assert.equal(freshnessGap('2026-11-23T00:00:00+09:00','2026-11-23',now),null);
+  assert.equal(freshnessGap('2026-11-22T23:59:59+09:00','2026-11-23',now)?.to,'2026-11-23');
+  assert.equal(freshnessGap('2026-11-22T15:00:00Z','2026-11-23',now),null);
+  assert.equal(freshnessGap('2026-11-23T14:59:59Z','2026-11-24',now)?.from,'2026-11-23');
+  assert.equal(freshnessGap('2026-11-23T00:00:00+09:00',null,now),null);
+  const data={period:{start:'2026-11-01',end:'2026-11-23'},freshness:{openwebui:{asOf:'2026-11-23T00:00:00+09:00',status:'failed',updating:false},tokens:{asOf:'2026-11-23T08:30:00+09:00',status:'ready',updating:false,coverageStart:String(Date.parse('2026-11-10T08:30:00+09:00')/1000)}}} as any;
+  assert.equal(requiresUpdate(data,now),false);
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(DataFreshness,{data})),/업데이트 필요/);
+  data.freshness.tokens.asOf='2026-11-22T23:59:59+09:00';
+  assert.equal(requiresUpdate(data,now),true);
+  data.freshness.tokens.asOf=null;
+  assert.equal(requiresUpdate(data,now),true);
 });
 
 test('all date-time labels stop at minutes and use Korean time',()=>{
