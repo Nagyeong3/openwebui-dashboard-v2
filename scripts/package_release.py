@@ -15,14 +15,14 @@ def main():
     files = sorted({name for name in names if name and name != 'BUILD-MANIFEST.json'
                     and (ROOT / name).is_file() and not (ROOT / name).is_symlink()})
     manifest = {
-        'release': '2026-11-17-reporting-v2',
+        'release': '2026-11-23-scheduled-update',
         'repository': 'https://github.com/Nagyeong3/openwebui-dashboard-v2',
-        'checks': {'backendTests': 112, 'frontendTests': 34, 'apiBuild': 'passed',
+        'checks': {'backendTests': 120, 'frontendTests': 38, 'apiBuild': 'passed',
                    'browserVisual': 'not-run-chromium-launch-failed'},
         'sha256': {name: hashlib.sha256((ROOT/name).read_bytes()).hexdigest() for name in files},
     }
     (ROOT/'BUILD-MANIFEST.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
-    target = ROOT/'artifacts/oui-dashboard-v2-reporting-20261117.zip'
+    target = ROOT/'artifacts/oui-dashboard-v2-scheduled-update-20261123.zip'
     target.parent.mkdir(exist_ok=True)
     with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as archive:
         for name in files + ['BUILD-MANIFEST.json']:

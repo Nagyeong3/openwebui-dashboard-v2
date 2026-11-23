@@ -13,7 +13,9 @@ def attach(app, settings, cache, authorized):
     @app.get('/api/dashboard/v2/operations/status',dependencies=[Depends(authorized)])
     def status():
         try:
-            return summary(settings,cache,store())
+            from .scheduler import schedule_status
+            db=store()
+            return {**summary(settings,cache,db), 'schedule': schedule_status(settings,db)}
         except (ValueError, RuntimeError) as error:
             raise HTTPException(422,str(error)) from None
 

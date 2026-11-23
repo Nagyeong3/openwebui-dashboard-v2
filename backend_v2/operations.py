@@ -38,11 +38,12 @@ CREATE TABLE IF NOT EXISTS operation_steps(run_id TEXT,name TEXT,status TEXT,sta
 PRAGMA user_version=1;''')
             db.execute(f'PRAGMA application_id={APP_ID}')
             columns={r[1] for r in db.execute('PRAGMA table_info(operation_runs)')}
-            for name,declaration in (('control',"TEXT DEFAULT ''"),('parent_id','TEXT')):
+            for name,declaration in (('control',"TEXT DEFAULT ''"),('parent_id','TEXT'),('origin',"TEXT DEFAULT 'manual'"),('scheduled_for','TEXT')):
                 if name not in columns:
                     db.execute(f'ALTER TABLE operation_runs ADD COLUMN {name} {declaration}')
+            db.execute('CREATE UNIQUE INDEX IF NOT EXISTS operation_schedule_slot ON operation_runs(scheduled_for) WHERE scheduled_for IS NOT NULL')
 
-    def start(self, kind, selected=None, parent_id=None):
+    def start(self, kind, selected=None, parent_id=None, *, scheduled_for=None):
         if kind not in ('quick', 'full', 'classify'):
             raise ValueError('Operation kind must be quick, full or classify')
         selected=tuple((('categories',) if kind=='classify' else STEPS) if selected is None else selected)
@@ -51,11 +52,13 @@ PRAGMA user_version=1;''')
         run = uuid.uuid4().hex
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
+            if scheduled_for and db.execute('SELECT id FROM operation_runs WHERE scheduled_for=?', (scheduled_for,)).fetchone():
+                return None
             if db.execute("SELECT 1 FROM operation_runs WHERE (status='running' AND expires>?) OR status='paused'", (time.time(),)).fetchone():
                 raise BusyError('업데이트가 진행 중이거나 일시 중단 상태입니다.')
             db.execute("UPDATE operation_steps SET status='interrupted',finished_at=? WHERE status='running' AND run_id IN (SELECT id FROM operation_runs WHERE status='running')", (now_iso(),))
             db.execute("UPDATE operation_runs SET status='interrupted',finished_at=?,error='서버 연결이 중단되었습니다.' WHERE status='running'", (now_iso(),))
-            db.execute("INSERT INTO operation_runs(id,kind,status,started_at,finished_at,error,expires,parent_id) VALUES(?,?,'running',?,NULL,NULL,?,?)", (run, kind, now_iso(), time.time()+600,parent_id))
+            db.execute("INSERT INTO operation_runs(id,kind,status,started_at,finished_at,error,expires,parent_id,origin,scheduled_for) VALUES(?,?,'running',?,NULL,NULL,?,?,?,?)", (run, kind, now_iso(), time.time()+600,parent_id,'scheduled' if scheduled_for else 'manual',scheduled_for))
             db.executemany("INSERT INTO operation_steps(run_id,name,status) VALUES(?,?,?)", [(run, s,'waiting' if s in selected else 'skipped') for s in STEPS])
         return run
 
@@ -137,12 +140,12 @@ def safe_error(error):
     return str(error) if isinstance(error, (ValueError, UpstreamError, BusyError)) else '작업에 실패했습니다. 연결 상태를 확인하세요.'
 
 
-def prepare(settings, cache, store, kind='quick', selected=None, parent_id=None):
+def prepare(settings, cache, store, kind='quick', selected=None, parent_id=None, *, scheduled_for=None):
     # Source locks remain authoritative, including collectors started from CLI.
     sources = [cache.status(), TokenStore(settings.token_cache_path).status(), CategoryStore(settings.category_cache_path).status()]
     if any(s['activeRunId'] or s.get('pausedRunId') for s in sources):
         raise BusyError('다른 수집이나 분류가 진행 중입니다.')
-    return store.start(kind,selected,parent_id)
+    return store.start(kind,selected,parent_id,scheduled_for=scheduled_for)
 
 
 def question_hashes(cache):

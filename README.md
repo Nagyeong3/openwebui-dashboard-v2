@@ -1,5 +1,7 @@
 # OUI Dashboard v2
 
+2026-11-23: 월요일08:30 자동 업데이트, 원천별 데이터 기준/미반영 안내, 기간 기억/이번 달 기본값을 반영했습니다. 설정과 반영 절차는 `docs/AUTO_UPDATE_AND_PERIOD_20261123_KO.md`를 확인하세요.
+
 이후 개발 기준 저장소: https://github.com/Nagyeong3/openwebui-dashboard-v2
 
 2026-11-16 최신 배포 ZIP을 복원한 뒤 2026-11-17 후속 보고 지표를 반영한 저장소입니다.

@@ -2,6 +2,7 @@ import hmac
 import csv
 import io
 import re
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,7 +19,16 @@ from .settings import Settings
 def create_app(settings=None, cache=None):
     settings = settings or Settings.from_env()
     cache = cache or Cache(settings.cache_path)
-    app = FastAPI(title="OpenWebUI Analytics Backend v2", version="0.2.0")
+    from .scheduler import WeeklyScheduler
+    scheduler = WeeklyScheduler(settings, cache)
+    @asynccontextmanager
+    async def lifespan(app):
+        scheduler.start()
+        try:
+            yield
+        finally:
+            scheduler.stop()
+    app = FastAPI(title="OpenWebUI Analytics Backend v2", version="0.2.0", lifespan=lifespan)
     origins = list(settings.cors_origins)
     if origins:
         app.add_middleware(

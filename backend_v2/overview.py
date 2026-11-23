@@ -99,6 +99,7 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
     }
     previous_tokens = None
     token_comparison_status = 'not-connected'
+    token_freshness = {'asOf': None, 'updating': False, 'status': 'not-connected', 'coverageStart': None}
     if settings.litellm_url or settings.token_cache_path.exists():
         try:
             from .token_analytics import token_usage
@@ -117,6 +118,11 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
                 "updatedAt": result["updatedAt"],
                 "stale": result["dataState"]["stale"],
             }
+            from .token_store import TokenStore
+            token_state = TokenStore(settings.token_cache_path).status()
+            token_freshness = {'asOf': result['updatedAt'], 'updating': bool(token_state['activeRunId']),
+                               'status': 'failed' if token_state['runs'] and token_state['runs'][0]['status'] in ('failed','interrupted','cancelled') else 'ready',
+                               'coverageStart': token_state['coverageStart']}
             if a and b:
                 from .token_store import TokenStore
                 _, token_meta = TokenStore(settings.token_cache_path).read(settings)
@@ -127,6 +133,7 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
         except Exception:
             if tokens['status'] != 'ready':
                 tokens["status"] = "not-synced"
+                token_freshness['status'] = 'not-synced'
             token_comparison_status = 'not-synced'
     categories = {"status":"not-connected","source":"embedding-classifier","records":None,"classified":None}
     if settings.category_csv or settings.category_cache_path.exists():
@@ -163,6 +170,11 @@ def overview(cache, settings, *, start=None, end=None, range_value="30d", compar
     for key, value_key in [('activity30dUsers', 'users'), ('dailyAverage', 'dailyAverage')]:
         metrics[key] = metric_change(activity[value_key], old_activity[value_key] if activity_known else None, old_activity_start, old_activity_end, 'available' if activity_known else 'no-history')
     return {
+        "freshness": {
+            "openwebui": {'asOf': payload['updatedAt'], 'updating': bool(state['activeRunId']),
+                          'status': 'failed' if state['runs'] and not state['activeRunId'] and state['runs'][0]['status'] != 'success' else 'ready'},
+            "tokens": token_freshness,
+        },
         "metricComparisons": metrics,
         "activity30d": activity,
         "weeklyResponses": weekly,

@@ -61,6 +61,7 @@ class Settings:
     category_revision: str = "1"
 
     operations_cache_path: Path | None = None
+    auto_update_enabled: bool = False
 
     @property
     def operations_path(self):
@@ -145,6 +146,7 @@ class Settings:
             return result if result.is_absolute() else path.parent / result
 
         return cls(
+            auto_update_enabled=config("DASHBOARD_AUTO_UPDATE_ENABLED", cast=bool, default=True),
             operations_cache_path=local_path("OPERATIONS_CACHE_DB_PATH"),
             category_cache_path=local_path("CATEGORY_CACHE_DB_PATH", "data/category_v2.sqlite3"),
             category_csv=local_path("CATEGORY_DEFINITIONS_CSV_PATH"),

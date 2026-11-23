@@ -32,11 +32,12 @@ import {
   lineOption,
 } from "./components";
 import { number } from "./domain";
+import {savePeriodPreference} from './period-preferences';
 import {
   defaultQuery,
   loadUsers,
   queryParams,
-  readQuery,
+  initialQuery,
   readScreen,
   userQuery,
   type Screen,
@@ -63,7 +64,7 @@ export default function LiveApp(){ return <AuthGate><Dashboard/></AuthGate>; }
 
 export function Dashboard() {
   const [q, setQ] = useState<Query>(() =>
-    userQuery(readQuery(location.search)),
+    userQuery(initialQuery(location.search)),
   );
   const [screen, setScreen] = useState<Screen>(() =>
     readScreen(location.search),
@@ -73,7 +74,7 @@ export function Dashboard() {
     period: Payload["period"];
   } | null>(null);
   const [dark, setDark] = useState(
-    () => localStorage.getItem("oui-theme") === "dark",
+    () => {try{return localStorage.getItem("oui-theme") === "dark";}catch{return false;}},
   );
   const [collapsed, setCollapsed] = useState(false);
   const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches);
@@ -114,9 +115,10 @@ export function Dashboard() {
     setDrawer(null);
     setExportError("");
   };
+  useEffect(()=>savePeriodPreference(q),[q.range,q.start,q.end]);
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light";
-    localStorage.setItem("oui-theme", dark ? "dark" : "light");
+    try{localStorage.setItem("oui-theme", dark ? "dark" : "light");}catch{ /* Browser storage can be disabled. */ }
   }, [dark]);
   useEffect(() => {
     const p = new URLSearchParams();
@@ -154,7 +156,7 @@ export function Dashboard() {
   }, [key]);
   useEffect(() => {
     const pop = () => {
-      const query = userQuery(readQuery(location.search));
+      const query = userQuery(initialQuery(location.search));
       setScreen(readScreen(location.search));
       setQ(query);
       setSearch(query.search);
@@ -401,7 +403,7 @@ export function Dashboard() {
                     <button
                       className="button"
                       onClick={() => {
-                        setQ({ ...defaultQuery, view: q.view });
+                        setQ({ ...defaultQuery, range:q.range, start:q.start, end:q.end, view: q.view });
                         setSearch("");
                         setDrawer(null);
                       }}

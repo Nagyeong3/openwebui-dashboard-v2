@@ -7,9 +7,9 @@ import ClassificationProgress from './ClassificationProgress';
 
 type Stats=Record<string,number|string>;
 type Step={name:'openwebui'|'tokens'|'categories';status:string;started_at:string|null;finished_at:string|null;error:string|null;source_id:string|null;stats:Stats};
-type Run={id:string;kind:'quick'|'full'|'classify';status:string;started_at:string;finished_at:string|null;error:string|null;control?:string;parent_id?:string|null;steps:Step[]};
+type Run={id:string;kind:'quick'|'full'|'classify';status:string;started_at:string;finished_at:string|null;error:string|null;control?:string;parent_id?:string|null;origin?:'manual'|'scheduled';scheduled_for?:string|null;steps:Step[]};
 type Source={ready?:boolean;configured:boolean;pausedRunId?:string|null;lastSuccess?:string|null;activeRunId:string|null;users?:number;messages?:number;logs?:number;questions?:number|null;pending?:number|null;classified?:number|null;lastRun?:{status:string;finished_at:string|null;error:string|null}|null};
-export type OperationStatus={schemaVersion:1;activeRunId:string|null;runs:Run[];sources:{openwebui:Source;tokens:Source;categories:Source};overlap:{openwebuiDays:number;litellmHours:number}};
+export type OperationStatus={schemaVersion:1;activeRunId:string|null;runs:Run[];sources:{openwebui:Source;tokens:Source;categories:Source};overlap:{openwebuiDays:number;litellmHours:number};schedule?:{enabled:boolean;timezone:string;weekday:number;time:string;kind:string;nextRunAt:string|null;pending:boolean;configured:boolean;lastRunId:string|null}};
 const names={openwebui:'데이터 업데이트',tokens:'토큰 업데이트',categories:'질문 분류'};
 const statusLabel:Record<string,string>={running:'진행 중',success:'완료',failed:'실패',partial:'일부 완료',cancelled:'중단됨',interrupted:'중단됨',paused:'일시 중단',waiting:'대기',skipped:'건너뜀'};
 const kindLabel:Record<string,string>={quick:'업데이트',full:'전체 업데이트',classify:'질문 분류'};
@@ -18,6 +18,7 @@ const n=(v:unknown)=>typeof v==='number'?number(v):'—';
 export function validateOperations(value:unknown):asserts value is OperationStatus{
   const p=value as OperationStatus;
   if(!p||p.schemaVersion!==1||!p.sources?.openwebui||!p.sources?.tokens||!p.sources?.categories||!p.overlap||!Array.isArray(p.runs))throw new Error('운영 업데이트 API 형식을 확인하세요. 백엔드도 함께 업데이트해야 합니다.');
+  if(p.schedule&&(typeof p.schedule.enabled!=='boolean'||typeof p.schedule.pending!=='boolean'||typeof p.schedule.configured!=='boolean'||p.schedule.time!=='08:30'||p.schedule.timezone!=='Asia/Seoul'||(p.schedule.nextRunAt!==null&&!Number.isFinite(Date.parse(p.schedule.nextRunAt)))))throw new Error('자동 업데이트 예약 상태가 올바르지 않습니다.');
   for(const r of p.runs){
     if(!r.id||!(r.kind in kindLabel)||!(r.status in statusLabel)||!Array.isArray(r.steps)||r.steps.length!==3||new Set(r.steps.map(s=>s.name)).size!==3)throw new Error('운영 작업 상태가 올바르지 않습니다.');
     for(const step of r.steps)if(!(step.name in names)||!(step.status in statusLabel)||!step.stats||Object.values(step.stats).some(v=>typeof v==='number'&&(!Number.isFinite(v)||v<0)))throw new Error('운영 단계의 상태나 집계가 올바르지 않습니다.');
@@ -46,8 +47,8 @@ export default function Operations({token,revision,onUpdated}:{token:string;revi
         setData(p);setError('');failures=0;
         if(previous&&!p.activeRunId)onUpdated();
         previous=p.activeRunId;
-        timer=setTimeout(poll,p.activeRunId||Object.values(p.sources).some(s=>s.activeRunId)?3000:30000);
-      }catch(e){if(!c.signal.aborted){setError(e instanceof Error?e.message:'운영 상태 조회 실패');if(++failures<=3)timer=setTimeout(poll,5000);}}
+        timer=setTimeout(poll,p.activeRunId||Object.values(p.sources).some(s=>s.activeRunId)?3000:15000);
+      }catch(e){if(!c.signal.aborted){setError(e instanceof Error?e.message:'운영 상태 조회 실패');timer=setTimeout(poll,Math.min(++failures*5000,30000));}}
     }
     void poll();return()=>{c.abort();clearTimeout(timer);};
   },[token,revision,tick]);
@@ -74,6 +75,8 @@ export default function Operations({token,revision,onUpdated}:{token:string;revi
   if(!data)return <div className="error-state" role="alert"><h2>운영 업데이트를 불러올 수 없습니다</h2><p>{error}</p><button className="button" onClick={()=>setTick(t=>t+1)}>다시 불러오기</button></div>;
   const catStep=active?.steps.find(s=>s.name==='categories'&&s.status==='running');
   return <div className="operations-page">
+    {data.schedule&&<div className="operations-schedule" role="status"><strong>자동 업데이트 {data.schedule.enabled?'켜짐':'꺼짐'}</strong>{data.schedule.enabled&&<><span>매주 월요일 오전 8:30 · 한국 시간</span><span>{data.schedule.pending?'예약 시각 도달 · 실행 대기':'다음 실행'} {date(data.schedule.nextRunAt)}</span>{!data.schedule.configured&&<span>OpenWebUI 연결 설정을 확인하세요.</span>}</>}</div>}
+    {active&&<div className="operations-running" role="status"><Loader2 size={18} className="spinning"/>{active.status==='paused'?'업데이트가 일시 중단되었습니다.':`${active.origin==='scheduled'?'자동':'수동'} 업데이트 진행 중`}</div>}
     <div className="operations-actions"><div className="operation-selection">{(['openwebui','tokens','categories'] as const).map(name=><label key={name}><input type="checkbox" checked={selected.includes(name)} disabled={busy} onChange={e=>setSelected(old=>e.target.checked?[...old,name]:old.filter(x=>x!==name))}/>{name==='openwebui'?'데이터':name==='tokens'?'토큰':'질문 분류'}</label>)}</div><button className="button primary" disabled={busy||!selected.length} onClick={()=>void start('quick')}>{busy?<Loader2 size={16} className="spinning"/>:<RefreshCw size={16}/>}업데이트</button>
       {job&&['running','paused','interrupted'].includes(job.status)&&<div className="table-controls">{job.status==='running'?<button className="button" disabled={sending||!!job.control} onClick={()=>void command('pause',job.id)}>{job.control==='pause'?'일시 중단 중':'일시 중단'}</button>:<button className="button primary" disabled={sending} onClick={()=>void command('resume',job.id)}>계속하기</button>}<button className="button" disabled={sending||job.control==='cancel'} onClick={()=>void command('cancel',job.id)}>{job.control==='cancel'?'중단 중':'중단'}</button></div>}
       </div>
@@ -84,7 +87,7 @@ export default function Operations({token,revision,onUpdated}:{token:string;revi
         return <article className="metric operations-source" key={key}><span className="operations-icon"><Icon size={23}/></span><div><strong>{key==='openwebui'?'OpenWebUI 데이터':key==='tokens'?'LiteLLM 토큰':'질문 분류'}</strong><span className={'operations-state '+(!s.configured?'warning':s.activeRunId?'running':s.ready||key==='categories'?'success':'waiting')}>{!s.configured?'설정 필요':s.pausedRunId?'일시 중단':s.activeRunId?'진행 중':s.ready||key==='categories'?'연결됨':'수집 대기'}</span>{key==='categories'?<><p>미처리 {n(s.pending)}건</p><small>분류 완료 {n(s.classified)}건</small></>:<><p>최근 수집 {date(s.lastSuccess)}</p><small>{key==='openwebui'?`등록 사용자 ${n(s.users)}명`:`저장 로그 ${n(s.logs)}건`}</small></>}</div></article>;
       })}
     </div>
-    <Panel title="업데이트 진행" subtitle={job?`${kindLabel[job.kind]} · 시작 ${date(job.started_at)}`:''} action={job?<span className={'operations-state '+job.status}>{statusLabel[job.status]}</span>:undefined}>
+    <Panel title="업데이트 진행" subtitle={job?`${job.origin==='scheduled'?'자동 예약 · ':''}${kindLabel[job.kind]} · 시작 ${date(job.started_at)}`:''} action={job?<span className={'operations-state '+job.status}>{statusLabel[job.status]}</span>:undefined}>
       <ol className="operations-timeline">{(['openwebui','tokens','categories'] as const).map((name,i)=>{
         const s=job?.steps.find(s=>s.name===name);const state=s?.status||'waiting';
         return <li key={name} className={state}><span className="operations-step-icon">{state==='success'?<Check size={19}/>:state==='running'?<Loader2 size={19} className="spinning"/>:state==='failed'?<AlertTriangle size={18}/>:i+1}</span><div className="operations-step-body"><strong>{names[name]}</strong><p>{s?stepText(s):name==='openwebui'?'새 데이터를 가져옵니다.':name==='tokens'?'사용량을 가져옵니다.':'남은 질문을 분류합니다.'}</p>{s?.status==='failed'&&name==='categories'&&typeof s.stats.calls==='number'&&<p>모델 요청 {n(s.stats.calls)}배치 · 처리 {n(s.stats.processed)}건</p>}{s?.started_at&&<small>{date(s.started_at)}{s.finished_at?' — '+date(s.finished_at):''}</small>}{s?.status==='running'&&name!=='categories'&&<div className="operations-indeterminate" aria-label="수집 진행 중"><i/></div>}</div><span className={'operations-state '+state}>{statusLabel[state]}</span></li>;
@@ -93,7 +96,7 @@ export default function Operations({token,revision,onUpdated}:{token:string;revi
       {job?.error&&<p className="live-warning" role="alert">{job.error}</p>}
       {!active&&job&&['partial','failed'].includes(job.status)&&<button className="button" disabled={sending} onClick={()=>void command('retry',job.id)}>실패 항목 다시 실행</button>}
     </Panel>
-    <Panel title="최근 실행 내역"><div className="overview-table-scroll"><table><thead><tr><th>시작 시각</th><th>실행 종류</th><th>데이터 수집</th><th>토큰 수집</th><th>질문 분류</th><th>결과</th><th>상세</th></tr></thead><tbody>{data.runs.map(r=><tr key={r.id}><td>{date(r.started_at)}</td><td>{r.parent_id?'재시도':kindLabel[r.kind]}</td>{r.steps.map(s=><td key={s.name}><span className={'operations-state '+s.status}>{statusLabel[s.status]}</span></td>)}<td><span className={'operations-state '+r.status}>{statusLabel[r.status]}</span></td><td>{!busy&&['partial','failed','cancelled'].includes(r.status)&&<button className="button" onClick={()=>void command('retry',r.id)}>재시도</button>}<button className="button" aria-expanded={expanded===r.id} onClick={()=>setExpanded(expanded===r.id?null:r.id)}>보기</button></td></tr>)}</tbody></table>{!data.runs.length&&<p className="muted">아직 실행한 업데이트가 없습니다.</p>}</div>{expanded&&<div className="operations-history-detail">{data.runs.find(r=>r.id===expanded)?.steps.map(s=><p key={s.name}><strong>{names[s.name]}</strong> · {stepText(s)}</p>)}</div>}</Panel>
+    <Panel title="최근 실행 내역"><div className="overview-table-scroll"><table><thead><tr><th>시작 시각</th><th>실행 종류</th><th>데이터 수집</th><th>토큰 수집</th><th>질문 분류</th><th>결과</th><th>상세</th></tr></thead><tbody>{data.runs.map(r=><tr key={r.id}><td>{date(r.started_at)}</td><td>{r.parent_id?'재시도':r.origin==='scheduled'?'자동 업데이트':kindLabel[r.kind]}</td>{r.steps.map(s=><td key={s.name}><span className={'operations-state '+s.status}>{statusLabel[s.status]}</span></td>)}<td><span className={'operations-state '+r.status}>{statusLabel[r.status]}</span></td><td>{!busy&&['partial','failed','cancelled'].includes(r.status)&&<button className="button" onClick={()=>void command('retry',r.id)}>재시도</button>}<button className="button" aria-expanded={expanded===r.id} onClick={()=>setExpanded(expanded===r.id?null:r.id)}>보기</button></td></tr>)}</tbody></table>{!data.runs.length&&<p className="muted">아직 실행한 업데이트가 없습니다.</p>}</div>{expanded&&<div className="operations-history-detail">{data.runs.find(r=>r.id===expanded)?.steps.map(s=><p key={s.name}><strong>{names[s.name]}</strong> · {stepText(s)}</p>)}</div>}</Panel>
     <details className="panel operations-advanced"><summary><ChevronDown size={17}/>고급 작업</summary><p className="muted">전체 데이터를 다시 가져옵니다. 시간이 오래 걸릴 수 있습니다.</p><div className="table-controls"><button className="button" disabled={busy} onClick={()=>void start('full')}><RefreshCw size={15}/>전체 업데이트</button><button className="button" disabled={busy} onClick={()=>void start('classify')}><Play size={15}/>질문 분류</button></div></details>
 
   </div>;

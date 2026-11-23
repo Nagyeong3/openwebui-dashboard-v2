@@ -1,5 +1,6 @@
 import type {RankFields,LeaderComparison} from "./Reporting";
 import { request } from "./api";
+import {loadPeriodPreference} from './period-preferences';
 
 export type View = "user" | "team" | "leader";
 export type Query = {
@@ -85,7 +86,7 @@ export type Payload = {
   };
 };
 export const defaultQuery: Query = {
-  range: "7d",
+  range: "month",
   start: "",
   end: "",
   division: "전체",
@@ -128,6 +129,11 @@ export function readQuery(search: string): Query {
   if ([10, 25, 50, 100].includes(Number(p.get("pageSize"))))
     q.pageSize = Number(p.get("pageSize"));
   return q;
+}
+export function initialQuery(search: string): Query {
+  const q=readQuery(search), p=new URLSearchParams(search);
+  // Shared links and browser history take priority over this browser's preference.
+  return p.has('range') || p.has('start') || p.has('end') ? q : {...q,...loadPeriodPreference()};
 }
 export function queryParams(q: Query): URLSearchParams {
   const p = new URLSearchParams();
@@ -293,6 +299,7 @@ export type OverviewPayload = Pick<
   Payload,
   "schemaVersion" | "source" | "period" | "updatedAt" | "dataState" | "daily"
 > & {
+  freshness?: import('./DataFreshness').Freshness;
   metricComparisons?: Record<string, import('./Comparison').MetricComparison>;
   summary: Payload["summary"] & {
     averageQuestionsPerChat: number | null;
@@ -401,6 +408,9 @@ export function validateOverview(
     fail();
   if (c.status === "zero-baseline" && c.questions !== 0) fail();
   if(p.activity30d){const a=p.activity30d;if(!text(a.start)||!text(a.end)||a.days!==30||!count(a.users)||!Number.isFinite(a.dailyAverage)||a.dailyAverage<0)fail();}
+  if(p.freshness)for(const key of ['openwebui','tokens'] as const){
+    const s=p.freshness[key];if(!s||!nullableText(s.asOf)||(s.asOf!==null&&!Number.isFinite(Date.parse(s.asOf)))||typeof s.updating!=='boolean'||typeof s.status!=='string')fail();
+  }
   if(p.metricComparisons){
     const keys=['activeUsers','questions','tokens','users','chats','attachmentQuestions','averageQuestionsPerChat','activeLeaders','activity30dUsers','dailyAverage'];
     for(const key of keys){
@@ -528,6 +538,7 @@ export function overviewCsv(p: OverviewPayload): string {
     ]),
   ];
   if(p.leaderComparison)rows.push([],['순위 비교 시작일',p.leaderComparison.start],['순위 비교 종료일',p.leaderComparison.end]);
+  if(p.freshness)rows.push([],['사용자·질문 데이터 기준',p.freshness.openwebui.asOf],['토큰 데이터 기준',p.freshness.tokens.asOf]);
   if(p.activity30d)rows.push([],['접속자 집계 시작',p.activity30d.start],['접속자 집계 종료',p.activity30d.end],['최근 30일간 접속자',p.activity30d.users],['일일 사용자 평균',p.activity30d.dailyAverage]);
   if(p.metricComparisons){
     const labels:Record<string,string>={activeUsers:'활성 사용자',questions:'총 질문 수',tokens:'총 토큰',users:'전체 사용자 수',chats:'총 채팅방 수',attachmentQuestions:'파일 첨부 질문',averageQuestionsPerChat:'평균 질문/채팅방',activeLeaders:'활성 팀장',activity30dUsers:'최근 30일간 접속자',dailyAverage:'일일 사용자 평균'};

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "build:api": "tsc -b && vite build --mode api",
     "dev:api": "vite --mode api --host 127.0.0.1 --port 4173",
-    "test": "node --import tsx --test src/domain.test.ts src/live-api.test.ts"
+    "test": "node --import tsx --test src/domain.test.ts src/live-api.test.ts src/scheduling-period.test.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans-kr": "^5.2.0",

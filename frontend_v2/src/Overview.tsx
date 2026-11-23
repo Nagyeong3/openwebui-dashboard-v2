@@ -1,5 +1,6 @@
 import {TokenCount,RankComparison,RankMovement,rankMovement} from "./Reporting";
 import {ComparisonBadge} from './Comparison';
+import DataFreshness from './DataFreshness';
 import { useEffect, useState } from "react";
 import { CategoryDistribution } from "./Categories";
 import {
@@ -113,26 +114,27 @@ export default function Overview({
   const key = periodParams(q).toString() + "|" + token + "|" + revision + "|" + (q.compareStart||"") + "|" + (q.compareEnd||"");
   useEffect(() => {
     const c = new AbortController();
+    let timer:ReturnType<typeof setTimeout>;
     setDailyPage(1);
-    loadOverview(q, token, c.signal)
+    function poll(){loadOverview(q, token, c.signal)
       .then((data) => {
         if (!c.signal.aborted) {
           setState({ key, data });
           onPeriod?.(data.period);
+          timer=setTimeout(poll,data.freshness?.openwebui.updating||data.freshness?.tokens.updating?5000:30000);
         }
       })
       .catch((e) => {
         if (!c.signal.aborted)
-          setState({
-            key,
-            error: e instanceof Error ? e.message : "개요 조회 실패",
-          });
+          {setState(old=>({...(old.key===key?old:{}),key,error:e instanceof Error?e.message:'개요 조회 실패'}));timer=setTimeout(poll,10000);}
       });
-    return () => c.abort();
+    }
+    poll();
+    return () => {c.abort();clearTimeout(timer);};
   }, [key]);
   const data = state.key === key ? state.data : undefined,
     error = state.key === key ? state.error : undefined;
-  if (error)
+  if (error && !data)
     return (
       <div className="error-state" role="alert">
         <AlertTriangle size={28} />
@@ -198,12 +200,8 @@ export default function Overview({
           리포트 CSV
         </button>
       </div>
-      {data.dataState.stale && (
-        <div className="live-warning" role="status">
-          <AlertTriangle size={16} />
-          최근 동기화가 완료되지 않아 마지막 성공 데이터를 표시합니다.
-        </div>
-      )}
+      <DataFreshness data={data}/>
+      {error&&<p className="live-warning" role="status">최신 상태를 확인하지 못했습니다. 마지막 조회 결과를 표시하며 다시 확인 중입니다.</p>}
       {data.dataState.organization !== "loaded" && (
         <p className="live-note">
           조직 CSV 상태: {data.dataState.organization}. 팀장 집계에는 올바른

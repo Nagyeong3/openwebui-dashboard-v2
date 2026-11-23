@@ -227,7 +227,7 @@ test("overview transport uses only period, auth and cancellation", async () => {
     controller = new AbortController();
   try {
     globalThis.fetch = async (url, options) => {
-      assert.equal(String(url), "/api/dashboard/v2/overview?range=7d");
+      assert.equal(String(url), "/api/dashboard/v2/overview?range=month");
       assert.equal(options?.signal, controller.signal);
       assert.equal(
         (options?.headers as Record<string, string>).Authorization,
@@ -275,9 +275,9 @@ test("leader chart receives full population independently of table pagination", 
   p.leaderRanking.pop();
   assert.throws(() => validateLeaderRanking(p));
 });
-test("date picker defaults to seven days and validates dates before apply", async () => {
+test("date picker defaults to this month and validates dates before apply", async () => {
   const { validPeriod } = await import("./PeriodPicker");
-  assert.equal(defaultQuery.range, "7d");
+  assert.equal(defaultQuery.range, "month");
   assert.equal(readQuery("?range=month").range, "month");
   assert.ok(validPeriod("2026-10-01", "2026-10-27"));
   assert.ok(validPeriod("2024-02-29", "2024-02-29"));

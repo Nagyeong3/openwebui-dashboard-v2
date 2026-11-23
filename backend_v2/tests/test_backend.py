@@ -264,8 +264,10 @@ class BackendTests(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(len(response.json()["leaderRanking"]), 13)
 
-    def test_month_period_uses_seoul_collection_date(self):
-        start, end = period(None, None, "month", "2026-09-30T16:00:00+00:00")
+    def test_month_period_uses_today_in_seoul_despite_stale_collection(self):
+        with patch('backend_v2.analytics.datetime') as clock:
+            clock.now.return_value=datetime.fromisoformat('2026-10-01T00:30:00+09:00')
+            start, end = period(None, None, "month", "2026-08-30T16:00:00+00:00")
         self.assertEqual(start.isoformat(), "2026-10-01")
         self.assertEqual(end.isoformat(), "2026-10-01")
         self.load()

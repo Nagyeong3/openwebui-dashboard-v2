@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { CalendarDays, Check, ChevronDown } from "lucide-react";
 import type { Query } from "./live-api";
+import {validPeriod} from './period-preferences';
+export {validPeriod} from './period-preferences';
 
 const presets = [
   ["7d", "최근 7일"],
@@ -8,18 +10,6 @@ const presets = [
   ["all", "전체기간"],
   ["custom", "기간 지정"],
 ] as const;
-export function validPeriod(start: string, end: string): boolean {
-  const parse = (s: string) =>
-    /^(?!0000)\d{4}-\d{2}-\d{2}$/.test(s) &&
-    !Number.isNaN(Date.parse(s)) &&
-    new Date(s).toISOString().slice(0, 10) === s;
-  return !!(
-    parse(start) &&
-    parse(end) &&
-    start <= end &&
-    (Date.parse(end) - Date.parse(start)) / 86400000 < 3660
-  );
-}
 export default function PeriodPicker({
   q,
   period,
@@ -37,7 +27,7 @@ export default function PeriodPicker({
     firstDate = useRef<HTMLInputElement>(null);
   const id = useId();
   const label =
-    presets.find(([v]) => v === q.range)?.[1] ||
+    (q.range==='custom' && validPeriod(q.start,q.end) ? `${q.start.replaceAll('-','.')} ~ ${q.end.replaceAll('-','.')}` : presets.find(([v]) => v === q.range)?.[1]) ||
     (q.range === "30d" ? "최근 30일" : "최근 90일");
   function close() {
     setOpen(null);
@@ -88,6 +78,7 @@ export default function PeriodPicker({
         ref={trigger}
         type="button"
         className="button period-trigger"
+        title={label}
         aria-label={`조회 기간: ${label}`}
         aria-haspopup={open === "custom" ? "dialog" : "menu"}
         aria-expanded={!!open}

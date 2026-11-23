@@ -27,7 +27,8 @@ def period(start, end, range_value, latest):
         return None, None
     if range_value not in ("7d", "30d", "90d", "month"):
         raise ValueError("range must be all, 7d, month, 30d or 90d")
-    b = datetime.fromisoformat(latest).astimezone(SEOUL).date()
+    # Relative periods follow the user's current calendar, not a stale cache date.
+    b = datetime.now(SEOUL).date()
     if range_value == "month":
         return b.replace(day=1), b
     return b - timedelta(days=int(range_value[:-1]) - 1), b

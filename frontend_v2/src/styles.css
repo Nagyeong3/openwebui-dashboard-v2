@@ -772,6 +772,16 @@ h1 {
   background: var(--hover);
   color: var(--muted);
 }
+.data-freshness { border:1px solid var(--border); border-radius:10px; background:var(--surface); padding:14px 16px; font-size:14px; }
+.data-freshness-sources, .operations-schedule { display:flex; flex-wrap:wrap; gap:12px 24px; align-items:center; }
+.data-freshness-sources > span { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.data-freshness-warning { margin-top:12px; padding:12px; border-left:3px solid #c68b32; background:#c68b3210; border-radius:5px; line-height:1.7; }
+.data-freshness-warning p { margin:5px 0 0; overflow-wrap:anywhere; }
+.operations-schedule { border:1px solid var(--border); border-radius:10px; padding:14px 16px; font-size:14px; background:var(--surface); }
+.operations-running { display:flex; align-items:center; gap:8px; padding:12px 16px; border-radius:8px; color:var(--accent); background:var(--accent-soft); font-size:15px; }
+.period-trigger { min-height:35px; height:auto; padding-top:7px; padding-bottom:7px; }
+.period-trigger > span { white-space:normal; overflow-wrap:anywhere; }
+.period-trigger > svg { flex-shrink:0; }
 .metric-accent {
   background: linear-gradient(120deg, #7168e9, #6562dc);
   border-color: transparent;
