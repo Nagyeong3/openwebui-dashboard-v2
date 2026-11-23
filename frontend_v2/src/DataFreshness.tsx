@@ -1,9 +1,10 @@
 import {useEffect,useState} from 'react';
+import {AlertTriangle} from 'lucide-react';
+import {formatDateMinute} from './date-format';
 import type {OverviewPayload} from './live-api';
 
 export type FreshnessSource={asOf:string|null;updating:boolean;status:string;coverageStart?:string|null};
 export type Freshness={openwebui:FreshnessSource;tokens:FreshnessSource};
-const dateTime=(value:string)=>new Date(value).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false});
 
 export function freshnessGap(asOf:string|null,end:string|null,now=Date.now()) {
   if(!asOf || !Number.isFinite(Date.parse(asOf)))return null;
@@ -12,32 +13,33 @@ export function freshnessGap(asOf:string|null,end:string|null,now=Date.now()) {
   return target-from>15*60000?{from:new Date(from).toISOString(),to:new Date(target).toISOString()}:null;
 }
 
-export default function DataFreshness({data}:{data:OverviewPayload}) {
-  const [now,setNow]=useState(()=>Date.now());
-  useEffect(()=>{const t=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(t);},[]);
-  const sources:Freshness=data.freshness??{
+function sourcesFor(data:OverviewPayload):Freshness {
+  return data.freshness??{
     openwebui:{asOf:data.updatedAt,updating:!!data.dataState.activeRunId,status:data.dataState.stale?'failed':'ready'},
     tokens:{asOf:data.integrations.tokens.updatedAt??null,updating:false,status:data.integrations.tokens.status},
   };
-  const warnings=Object.entries(sources).flatMap(([key,s])=>{
-    const label=key==='openwebui'?'사용자·질문':'토큰',gap=freshnessGap(s.asOf,data.period.end,now);
-    if(!s.asOf)return [`${label}: 아직 수집된 데이터가 없습니다.`];
-    const result=[];
-    if(s.status==='failed')result.push(`${label}: 최근 업데이트가 완료되지 않아 마지막 성공 데이터를 표시합니다.`);
-    if(gap){
-      const rangeStart=data.period.start?Date.parse(data.period.start+'T00:00:00+09:00'):0;
-      const from= Math.max(Date.parse(gap.from),rangeStart);
-      if(from<Date.parse(gap.to))result.push(`${label}: ${dateTime(new Date(from).toISOString())} ~ ${dateTime(gap.to)} 활동이 아직 반영되지 않았을 수 있습니다.`);
-    }
-    if(s.coverageStart && data.period.start && Number(s.coverageStart)>Date.parse(data.period.start+'T00:00:00+09:00')/1000)
-      result.push(`${label}: 선택 기간 시작일보다 수집 시작일이 늦어 과거 일부 데이터가 없습니다.`);
-    return result;
+}
+
+export function requiresUpdate(data:OverviewPayload,now=Date.now()):boolean {
+  return Object.values(sourcesFor(data)).some(s=>{
+    if(!s.asOf || !Number.isFinite(Date.parse(s.asOf)))return true;
+    const gap=freshnessGap(s.asOf,data.period.end,now);
+    const start=data.period.start?Date.parse(data.period.start+'T00:00:00+09:00'):0;
+    return !!(gap && Math.max(Date.parse(gap.from),start)<Date.parse(gap.to))
+      || !!(s.coverageStart && data.period.start && Number(s.coverageStart)>start/1000);
   });
+}
+
+export default function DataFreshness({data,unconfirmed=false}:{data:OverviewPayload;unconfirmed?:boolean}) {
+  const [now,setNow]=useState(()=>Date.now());
+  useEffect(()=>{const t=setInterval(()=>setNow(Date.now()),60000);return()=>clearInterval(t);},[]);
+  const sources=sourcesFor(data);
   return <section className="data-freshness" aria-label="데이터 최신화 상태">
-    <div className="data-freshness-sources">{Object.entries(sources).map(([key,s])=><span key={key}>
-      <strong>{key==='openwebui'?'사용자·질문':'토큰'} 데이터 기준</strong> {s.asOf?dateTime(s.asOf):'수집 전'}
-      {s.updating&&<span className="operations-state running">업데이트 진행 중</span>}
-    </span>)}</div>
-    {warnings.length>0&&<div className="data-freshness-warning" role="status"><strong>선택 기간의 일부 데이터가 미반영될 수 있습니다.</strong>{warnings.map(w=><p key={w}>{w}</p>)}<p>기간을 변경해도 데이터를 새로 수집하지는 않습니다. 운영 업데이트에서 수집 상태를 확인하세요.</p></div>}
+    <div className="data-freshness-sources">
+      <span><strong>선택 기간</strong>{data.period.start&&data.period.end?`${data.period.start} ~ ${data.period.end}`:'전체 기간'}</span>
+      <span><strong>사용량 데이터 기준</strong>{formatDateMinute(sources.openwebui.asOf)}</span>
+      <span><strong>토큰 데이터 기준</strong>{formatDateMinute(sources.tokens.asOf)}</span>
+      {(unconfirmed||requiresUpdate(data,now))&&<span className="data-update-needed" role="status"><AlertTriangle size={19} strokeWidth={1.8} aria-hidden="true"/>업데이트 필요</span>}
+    </div>
   </section>;
 }

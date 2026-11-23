@@ -1,3 +1,4 @@
+import {formatDateMinute} from './date-format';
 import {RankComparison,RankMovement,rankMovement} from "./Reporting";
 import { useEffect, useRef, useState } from "react";
 import { MotionConfig, motion } from "motion/react";
@@ -56,7 +57,7 @@ import PeriodPicker from "./PeriodPicker";
 const ALL = "전체";
 const dateTime = (s: string | null) =>
   s
-    ? new Date(s).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })
+    ? formatDateMinute(s)
     : "사용 기록 없음";
 const apiBase = (import.meta.env?.VITE_API_BASE_URL || "").replace(/\/$/, "");
 

@@ -191,17 +191,12 @@ export default function Overview({
   return (
     <div className="overview-content">
       <div className="overview-meta">
-        <span>
-          선택 기간 {data.period.start || "전체"} — {data.period.end || "전체"}{" "}
-          · 한국 시간
-        </span>
+        <DataFreshness data={data} unconfirmed={!!error}/>
         <button className="button" onClick={exportReport}>
           <ArrowDownToLine size={15} />
           리포트 CSV
         </button>
       </div>
-      <DataFreshness data={data}/>
-      {error&&<p className="live-warning" role="status">최신 상태를 확인하지 못했습니다. 마지막 조회 결과를 표시하며 다시 확인 중입니다.</p>}
       {data.dataState.organization !== "loaded" && (
         <p className="live-note">
           조직 CSV 상태: {data.dataState.organization}. 팀장 집계에는 올바른
@@ -535,14 +530,6 @@ export default function Overview({
           </div>
         </Panel>
       </div>
-      <footer className="page-footer">
-        <span>
-          마지막 업데이트:{" "}
-          {new Date(data.updatedAt).toLocaleString("ko-KR", {
-            timeZone: "Asia/Seoul",
-          })}
-        </span>
-      </footer>
     </div>
   );
 }

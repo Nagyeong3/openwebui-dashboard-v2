@@ -5,7 +5,8 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {loadPeriodPreference,savePeriodPreference,PERIOD_STORAGE_KEY} from './period-preferences';
 import {defaultQuery,initialQuery} from './live-api';
 import PeriodPicker from './PeriodPicker';
-import DataFreshness,{freshnessGap} from './DataFreshness';
+import DataFreshness,{freshnessGap,requiresUpdate} from './DataFreshness';
+import {formatDateMinute} from './date-format';
 
 function storage(){const values=new Map<string,string>();return {getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v);}};}
 test('period preferences restore valid custom dates, moving presets, and handle corrupt/blocked storage',()=>{
@@ -43,5 +44,21 @@ test('freshness gaps use source watermarks, not latest messages, and respect his
   assert.equal(freshnessGap('2026-11-23T11:50:00+09:00','2026-11-23',now),null);
   assert.equal(freshnessGap(null,'2026-11-23',now),null);
   const html=renderToStaticMarkup(React.createElement(DataFreshness,{data:{updatedAt:'2026-11-16T08:30:00+09:00',period:{start:'2026-11-01',end:'2026-11-23'},dataState:{activeRunId:'running',stale:false},integrations:{tokens:{status:'not-synced'}}} as any}));
-  assert.match(html,/데이터 기준/);assert.match(html,/업데이트 진행 중/);assert.match(html,/미반영/);assert.match(html,/토큰: 아직 수집된/);
+  assert.match(html,/선택 기간/);assert.match(html,/사용량 데이터 기준/);assert.match(html,/토큰 데이터 기준/);
+  assert.match(html,/업데이트 필요/);assert.match(html,/data-update-needed/);assert.match(html,/<svg/);
+  assert.doesNotMatch(html,/미반영|아직 수집된|기간을 변경해도|업데이트 진행 중|최근 업데이트/);
+  const covered={period:{start:'2026-11-01',end:'2026-11-15'},freshness:{openwebui:{asOf:'2026-11-16T08:30:00+09:00',status:'failed',updating:false},tokens:{asOf:'2026-11-16T08:30:00+09:00',status:'ready',updating:false}}} as any;
+  assert.equal(requiresUpdate(covered,now),false);
+  const coveredHtml=renderToStaticMarkup(React.createElement(DataFreshness,{data:covered}));
+  assert.doesNotMatch(coveredHtml,/업데이트 필요/);
+  covered.freshness.tokens.coverageStart=String(Date.parse('2026-11-10T00:00:00+09:00')/1000);
+  assert.equal(requiresUpdate(covered,now),true);
+});
+
+test('all date-time labels stop at minutes and use Korean time',()=>{
+  const at=formatDateMinute('2026-11-22T23:30:00+00:00');
+  assert.equal(at,formatDateMinute('2026-11-22T23:30:59+00:00'));
+  assert.match(at,/2026.*11.*23/);assert.match(at,/08:30$/);
+  assert.doesNotMatch(at,/\d{2}:\d{2}:\d{2}/);
+  assert.equal(formatDateMinute(null),'—');
 });

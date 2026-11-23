@@ -1,3 +1,4 @@
+import {formatDateMinute} from './date-format';
 import {TokenCount} from "./Reporting";
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownToLine, Coins, Loader2, RefreshCw } from "lucide-react";
@@ -305,9 +306,7 @@ export default function Tokens({
           <p>
             마지막 성공:{" "}
             {status?.lastSuccess
-              ? new Date(status.lastSuccess).toLocaleString("ko-KR", {
-                  timeZone: "Asia/Seoul",
-                })
+              ? formatDateMinute(status.lastSuccess)
               : "아직 없음"}{" "}
             · 저장 로그 {value(status?.logs)}건
           </p>
@@ -627,9 +626,7 @@ export default function Tokens({
                     {data.detail.records.map((r) => (
                       <tr key={r.id}>
                         <td>
-                          {new Date(r.at * 1000).toLocaleString("ko-KR", {
-                            timeZone: "Asia/Seoul",
-                          })}
+                          {formatDateMinute(r.at * 1000)}
                         </td>
                         <td>{r.model}</td>
                         <td>{r.userName || "미식별"}</td>

@@ -1,3 +1,4 @@
+import {formatDateMinute} from './date-format';
 import {useEffect,useState} from 'react';
 import {Check,ChevronDown,Database,FileText,Loader2,Play,RefreshCw,Tags,AlertTriangle} from 'lucide-react';
 import {Panel} from './components';
@@ -13,7 +14,7 @@ export type OperationStatus={schemaVersion:1;activeRunId:string|null;runs:Run[];
 const names={openwebui:'데이터 업데이트',tokens:'토큰 업데이트',categories:'질문 분류'};
 const statusLabel:Record<string,string>={running:'진행 중',success:'완료',failed:'실패',partial:'일부 완료',cancelled:'중단됨',interrupted:'중단됨',paused:'일시 중단',waiting:'대기',skipped:'건너뜀'};
 const kindLabel:Record<string,string>={quick:'업데이트',full:'전체 업데이트',classify:'질문 분류'};
-const date=(s:string|null|undefined)=>s?new Date(s).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'}):'아직 없음';
+const date=(s:string|null|undefined)=>s?formatDateMinute(s):'아직 없음';
 const n=(v:unknown)=>typeof v==='number'?number(v):'—';
 export function validateOperations(value:unknown):asserts value is OperationStatus{
   const p=value as OperationStatus;
